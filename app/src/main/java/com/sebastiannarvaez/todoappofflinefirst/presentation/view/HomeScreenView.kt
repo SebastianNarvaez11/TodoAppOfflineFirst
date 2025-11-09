@@ -52,12 +52,12 @@ fun HomeScreenView(innerPadding: PaddingValues, viewModel: TaskViewModel = hiltV
             innerPadding = innerPadding,
             tasks = uiState.tasks,
             error = uiState.error,
-            isLoading = uiState.isLoading,
-            onLoadTaskFromApi = { viewModel.getAllTaskFromApi() },
-//            onDeleteTask = { viewModel.deleteTask(it) },
-            onDeleteTask = { viewModel.deleteTaskApi(it) },
-//            onPressTask = { viewModel.toggleTaskStatus(it) }
-            onPressTask = { viewModel.toggleTaskStatusApi(it) }
+            isLoading = uiState.isLoading || uiState.isRefreshingFromRemote,
+//            onLoadTaskFromApi = { viewModel.getAllTaskFromApi() },
+            onDeleteTask = { viewModel.deleteTask(it) },
+//            onDeleteTask = { viewModel.deleteTaskApi(it) },
+            onPressTask = { viewModel.toggleTaskStatus(it) }
+//            onPressTask = { viewModel.toggleTaskStatusApi(it) }
         )
     }
 
@@ -96,8 +96,8 @@ fun HomeScreenView(innerPadding: PaddingValues, viewModel: TaskViewModel = hiltV
             onTitleChange = { viewModel.onTitleChange(it) },
             onDescriptionChange = { viewModel.onDescriptionChange(it) },
             onCategoryChange = { viewModel.onCategoryChange(it) },
-//            onSavePress = { viewModel.onSaveTask() }
-            onSavePress = { viewModel.onSaveTaskApi() }
+            onSavePress = { viewModel.onSaveTask() }
+//            onSavePress = { viewModel.onSaveTaskApi() }
         ) {
             viewModel.toggleAddTaskDialog()
             viewModel.resetForm()

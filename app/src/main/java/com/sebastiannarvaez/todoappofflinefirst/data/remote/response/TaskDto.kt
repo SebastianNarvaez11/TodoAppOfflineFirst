@@ -7,20 +7,26 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class TaskDto(
-    val id: String,
+    val remoteId: String,
+    val localId: Long,
     val title: String,
     val description: String,
     val category: String,
+    val isSynced: Boolean,
+    val isDeleted: Boolean,
     @SerialName("is_check") val isChecked: Boolean,
     @SerialName("created_at") val createdAt: String
 )
 
 fun TaskDto.toDomain(): TaskModel {
     return TaskModel(
-        id = this.id,
-        title = this.title,
-        description = this.description,
+        localId = localId,
+        remoteId = remoteId,
+        title = title,
+        description = description,
         category = TaskCategory.valueOf(this.category),
-        isDone = this.isChecked
+        isDone = this.isChecked,
+        isSynced = isSynced,
+        isDeleted = isDeleted
     )
 }

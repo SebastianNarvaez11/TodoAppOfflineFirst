@@ -14,6 +14,8 @@ import com.sebastiannarvaez.todoappofflinefirst.domain.usecase.CreateTaskUseCase
 import com.sebastiannarvaez.todoappofflinefirst.domain.usecase.DeleteTaskApiUseCase
 import com.sebastiannarvaez.todoappofflinefirst.domain.usecase.DeleteTaskUseCase
 import com.sebastiannarvaez.todoappofflinefirst.domain.usecase.GetAllTaskApiUseCase
+import com.sebastiannarvaez.todoappofflinefirst.domain.usecase.RefreshFromRemoteUseCase
+import com.sebastiannarvaez.todoappofflinefirst.domain.usecase.SyncPendingTasksUseCase
 import com.sebastiannarvaez.todoappofflinefirst.domain.usecase.UpdateTaskApiUseCase
 import com.sebastiannarvaez.todoappofflinefirst.domain.usecase.UpdateTaskUseCase
 import com.sebastiannarvaez.todoappofflinefirst.utils.validateDescription
@@ -36,11 +38,13 @@ class TaskViewModel @Inject constructor(
     private val getAllTaskUseCase: GetAllTaskUseCase,
     private val createTaskUseCase: CreateTaskUseCase,
     private val updateTaskUseCase: UpdateTaskUseCase,
-    private val deleteTaskUseCase: DeleteTaskUseCase,
-    private val getAllTaskApiUseCase: GetAllTaskApiUseCase,
-    private val createTaskApiUseCase: CreateTaskApiUseCase,
-    private val updateTaskApiUseCase: UpdateTaskApiUseCase,
-    private val deleteTaskApiUseCase: DeleteTaskApiUseCase
+    private val refreshFromRemoteUseCase: RefreshFromRemoteUseCase,
+    private val syncPendingTasksUseCase: SyncPendingTasksUseCase
+//    private val deleteTaskUseCase: DeleteTaskUseCase,
+//    private val getAllTaskApiUseCase: GetAllTaskApiUseCase,
+//    private val createTaskApiUseCase: CreateTaskApiUseCase,
+//    private val updateTaskApiUseCase: UpdateTaskApiUseCase,
+//    private val deleteTaskApiUseCase: DeleteTaskApiUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TasksUiState())
@@ -71,6 +75,8 @@ class TaskViewModel @Inject constructor(
         // Esto le dice a Room "Empieza a vigilar la tabla ahora".
 //        observeTask() // Versión simple, sin filtro.
         observerCombineTask() // Versión avanzada, combina datos + filtro.
+
+        startInitialSync()
     }
 
     fun toggleAddTaskDialog() {
@@ -154,7 +160,6 @@ class TaskViewModel @Inject constructor(
         _uiState.update { it.copy(isLoading = true) }
 
         viewModelScope.launch {
-            delay(2000)
             getAllTaskUseCase()
                 .catch { e ->
                     _uiState.update {
@@ -186,21 +191,21 @@ class TaskViewModel @Inject constructor(
 
         if (_formState.isValidForm) {
             val newTask = TaskModel(
-                id = "0",
+                localId = 0,
                 title = _formState.title.value,
                 description = _formState.description.value,
                 category = _formState.category!!,
-                isDone = false
+                isDone = false,
             )
 
             _uiState.update { it.copy(isSavingTask = true) }
 
             viewModelScope.launch {
-                delay(2000)
+//                delay(2000)
                 createTaskUseCase(newTask)
-                    .onSuccess { taskId ->
+                    .onSuccess {
                         _uiState.update { it.copy(isSavingTask = false, errorSavingTask = null) }
-                        _uiEvent.emit(UiEventState.ShowToast("Tarea creada con el id: $taskId"))
+                        _uiEvent.emit(UiEventState.ShowToast("Tarea creada"))
                         toggleAddTaskDialog()
                         resetForm()
                     }
@@ -227,13 +232,9 @@ class TaskViewModel @Inject constructor(
         _uiState.update { it.copy(isUpdatingTask = true) }
 
         viewModelScope.launch {
-            updateTaskUseCase(task.copy(isDone = !task.isDone))
+            updateTaskUseCase(task.localId, TaskUpdateParams(isDone = !task.isDone))
                 .onFailure { e ->
-                    _uiEvent.emit(
-                        UiEventState.ShowToast(
-                            e.message ?: "Error al actualizar"
-                        )
-                    )
+                    _uiState.update { it.copy(error = e.message) }
                 }
 
             _uiState.update { it.copy(isUpdatingTask = false) }
@@ -241,117 +242,192 @@ class TaskViewModel @Inject constructor(
     }
 
     fun deleteTask(task: TaskModel) {
-        viewModelScope.launch {
-            deleteTaskUseCase(task)
-                .onSuccess { _uiEvent.emit(UiEventState.ShowToast("Tarea eliminada")) }
-                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
-
-        }
-    }
-
-    fun getAllTaskFromApi() {
-        _uiState.update { it.copy(isLoading = true) }
-
-        viewModelScope.launch {
-            getAllTaskApiUseCase()
-                .onSuccess { tasks ->
-                    _uiState.update {
-                        it.copy(
-                            tasks = tasks,
-                            isLoading = false
-                        )
-                    }
-                }
-                .onFailure { e ->
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            error = e.message ?: "Error al obtener las task de la api"
-                        )
-                    }
-                }
-        }
-    }
-
-    fun onSaveTaskApi() {
-        validateForm()
-
-        if (_formState.isValidForm) {
-            val newTask = TaskModel(
-                id = "0",
-                title = _formState.title.value,
-                description = _formState.description.value,
-                category = _formState.category!!,
-                isDone = false
-            )
-
-            _uiState.update { it.copy(isSavingTask = true) }
-
-            viewModelScope.launch {
-                delay(2000)
-                createTaskApiUseCase(newTask)
-                    .onSuccess { createdTask ->
-                        _uiState.update { it.copy(isSavingTask = false, errorSavingTask = null) }
-                        _uiEvent.emit(UiEventState.ShowToast("Tarea creada con el id: ${createdTask.id}"))
-                        toggleAddTaskDialog()
-                        resetForm()
-                        getAllTaskFromApi()//refrescar la lista manualmente
-                    }
-                    .onFailure { e ->
-                        println(e)
-                        _uiState.update {
-                            it.copy(
-                                isSavingTask = false,
-                                errorSavingTask = e.message ?: "Error al crear la tarea"
-                            )
-                        }
-                    }
-            }
-        } else {
-            val errors = _formState.getErrors()
-            if (errors.isNotEmpty()) {
-                viewModelScope.launch {
-                    _uiEvent.emit(UiEventState.ShowToast(errors[0]))
-                }
-            }
-        }
-    }
-
-    fun toggleTaskStatusApi(task: TaskModel) {
         _uiState.update { it.copy(isUpdatingTask = true) }
 
         viewModelScope.launch {
-            val paramsToUpdate = TaskUpdateParams(isDone = !task.isDone)
-            updateTaskApiUseCase(task.id, paramsToUpdate)
-                .onSuccess { updatedTask ->
-                    _uiState.update { it.copy(isUpdatingTask = false) }
-                    getAllTaskFromApi()//refrescar la lista manualmente
-                }
+            updateTaskUseCase(task.localId, TaskUpdateParams(isDeleted = true))
                 .onFailure { e ->
-                    _uiState.update {
-                        it.copy(
-                            error = e.message ?: "Error al actualizar",
-                            isUpdatingTask = false
-                        )
-                    }
+                    _uiState.update { it.copy(error = e.message) }
                 }
+
+            _uiState.update { it.copy(isUpdatingTask = false) }
+
+//            deleteTaskUseCase(task)
+//                .onSuccess { _uiEvent.emit(UiEventState.ShowToast("Tarea eliminada")) }
+//                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
     }
 
-    fun deleteTaskApi(task: TaskModel) {
+//    fun getAllTaskFromApi() {
+//        _uiState.update { it.copy(isLoading = true) }
+//
+//        viewModelScope.launch {
+//            getAllTaskApiUseCase()
+//                .onSuccess { tasks ->
+//                    _uiState.update {
+//                        it.copy(
+//                            tasks = tasks,
+//                            isLoading = false
+//                        )
+//                    }
+//                }
+//                .onFailure { e ->
+//                    _uiState.update {
+//                        it.copy(
+//                            isLoading = false,
+//                            error = e.message ?: "Error al obtener las task de la api"
+//                        )
+//                    }
+//                }
+//        }
+//    }
+
+//    fun onSaveTaskApi() {
+//        validateForm()
+//
+//        if (_formState.isValidForm) {
+//            val newTask = TaskModel(
+//                id = "0",
+//                title = _formState.title.value,
+//                description = _formState.description.value,
+//                category = _formState.category!!,
+//                isDone = false
+//            )
+//
+//            _uiState.update { it.copy(isSavingTask = true) }
+//
+//            viewModelScope.launch {
+//                delay(2000)
+//                createTaskApiUseCase(newTask)
+//                    .onSuccess { createdTask ->
+//                        _uiState.update { it.copy(isSavingTask = false, errorSavingTask = null) }
+//                        _uiEvent.emit(UiEventState.ShowToast("Tarea creada con el id: ${createdTask.id}"))
+//                        toggleAddTaskDialog()
+//                        resetForm()
+//                        getAllTaskFromApi()//refrescar la lista manualmente
+//                    }
+//                    .onFailure { e ->
+//                        println(e)
+//                        _uiState.update {
+//                            it.copy(
+//                                isSavingTask = false,
+//                                errorSavingTask = e.message ?: "Error al crear la tarea"
+//                            )
+//                        }
+//                    }
+//            }
+//        } else {
+//            val errors = _formState.getErrors()
+//            if (errors.isNotEmpty()) {
+//                viewModelScope.launch {
+//                    _uiEvent.emit(UiEventState.ShowToast(errors[0]))
+//                }
+//            }
+//        }
+//    }
+
+//    fun toggleTaskStatusApi(task: TaskModel) {
+//        _uiState.update { it.copy(isUpdatingTask = true) }
+//
+//        viewModelScope.launch {
+//            val paramsToUpdate = TaskUpdateParams(isDone = !task.isDone)
+//            updateTaskApiUseCase(task.id, paramsToUpdate)
+//                .onSuccess { updatedTask ->
+//                    _uiState.update { it.copy(isUpdatingTask = false) }
+//                    getAllTaskFromApi()//refrescar la lista manualmente
+//                }
+//                .onFailure { e ->
+//                    _uiState.update {
+//                        it.copy(
+//                            error = e.message ?: "Error al actualizar",
+//                            isUpdatingTask = false
+//                        )
+//                    }
+//                }
+//        }
+//    }
+
+//    fun deleteTaskApi(task: TaskModel) {
+//        viewModelScope.launch {
+//            deleteTaskApiUseCase(task.id)
+//                .onSuccess {
+//                    _uiEvent.emit(UiEventState.ShowToast("Tarea eliminada"))
+//                    getAllTaskFromApi()//refrescar la lista manualmente
+//                }
+//                .onFailure { e ->
+//                    _uiState.update {
+//                        it.copy(
+//                            error = e.message ?: "Error al borrar tarea"
+//                        )
+//                    }
+//                }
+//        }
+//    }
+
+//    private fun refreshTasksFromRemoteOnStart() {
+//        _uiState.update { it.copy(isRefreshingFromRemote = true) }
+//
+//        viewModelScope.launch {
+//            delay(2000)
+//            refreshFromRemoteUseCase() // Esto llena Room
+//                .onFailure { e ->
+//                    // El ViewModel maneja el error de "refresco"
+//                    _uiState.update { it.copy(error = "No se puedo refrecar: ${e.message}") }
+//                }
+//            // No necesitamos .onSuccess, porque el Flow 'observerCombineTask'
+//            // detectará los cambios en Room y actualizará la UI solo.
+//            _uiState.update { it.copy(isRefreshingFromRemote = false) }
+//        }
+//    }
+//
+//    private fun syncPendingTasks() {
+//        _uiState.update { it.copy(isRefreshingFromRemote = true) }
+//
+//        viewModelScope.launch {
+//            syncPendingTasksUseCase()
+//                .onFailure { e ->
+//                    // El ViewModel maneja el error de "sincronizacion"
+//                    _uiState.update { it.copy(error = "No se puedo sincronizar: ${e.message}") }
+//                }
+//
+//            // No necesitamos .onSuccess, porque el Flow 'observerCombineTask'
+//            // detectará los cambios en Room y actualizará la UI solo.
+//            _uiState.update { it.copy(isRefreshingFromRemote = false) }
+//        }
+//    }
+
+    /**
+     * Inicia la secuencia de sincronización completa (PUSH-then-PULL).
+     * Esta función es "segura" para llamarse desde el 'init'
+     * o desde un botón de refresco manual.
+     */
+    fun startInitialSync() {
+        // Lanzamos una sola corutina para toda la secuencia
         viewModelScope.launch {
-            deleteTaskApiUseCase(task.id)
-                .onSuccess {
-                    _uiEvent.emit(UiEventState.ShowToast("Tarea eliminada"))
-                    getAllTaskFromApi()//refrescar la lista manualmente
-                }
-                .onFailure { e ->
-                    _uiState.update {
-                        it.copy(
-                            error = e.message ?: "Error al borrar tarea"
-                        )
-                    }
-                }
+            _uiState.update { it.copy(isRefreshingFromRemote = true) } // Mostrar spinner
+
+            // 1. PUSH: Intentar subir cambios locales primero
+            val pushResult = syncPendingTasksUseCase()
+
+            if (pushResult.isFailure) {
+                // Opcional: Notificar al usuario que el PUSH falló
+                // El PULL se ejecutará de todos modos para obtener datos nuevos
+                _uiState.update { it.copy(error = "Error al subir cambios: ${pushResult.exceptionOrNull()?.message}") }
+            }
+
+            // 2. PULL: Traer cambios del servidor
+            val pullResult = refreshFromRemoteUseCase()
+
+            if (pullResult.isFailure) {
+                _uiState.update { it.copy(error = "Error al descargar tareas: ${pushResult.exceptionOrNull()?.message}") }
+            }
+
+            // 3. Ocultar spinner
+            _uiState.update { it.copy(isRefreshingFromRemote = false) }
+
+            if (pushResult.isSuccess && pullResult.isSuccess) {
+                _uiEvent.emit(UiEventState.ShowToast("Datos sincronizados ✅"))
+            }
         }
     }
 }

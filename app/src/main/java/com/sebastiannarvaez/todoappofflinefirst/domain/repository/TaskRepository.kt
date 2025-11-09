@@ -7,17 +7,21 @@ import kotlinx.coroutines.flow.Flow
 interface TaskRepository {
     fun getAllTask(): Flow<List<TaskModel>>
 
-    suspend fun getAllTaskApi(): Result<List<TaskModel>>
+    suspend fun refreshFromRemote(): Result<Unit>
 
-    suspend fun createTask(task: TaskModel): Result<Long>
+    suspend fun syncPendingTasks(): Result<Unit>
 
-    suspend fun createTaskApi(task: TaskModel): Result<TaskModel>
+//    suspend fun getAllTaskApi(): Result<List<TaskModel>>
 
-    suspend fun updateTask(task: TaskModel): Result<Int>
+    suspend fun createTask(task: TaskModel): Result<Unit>
 
-    suspend fun updateTaskApi(taskId: String, params: TaskUpdateParams): Result<TaskModel>
+//    suspend fun createTaskApi(task: TaskModel): Result<TaskModel>
 
-    suspend fun deleteTask(task: TaskModel): Result<Int>
+    suspend fun updateTask(taskLocalId: Long, params: TaskUpdateParams): Result<Unit>
 
-    suspend fun deleteTaskApi(taskId: String): Result<Boolean>
+//    suspend fun updateTaskApi(taskId: String, params: TaskUpdateParams): Result<TaskModel>
+
+//    suspend fun deleteTask(task: TaskModel): Result<Unit>
+
+//    suspend fun deleteTaskApi(taskId: String): Result<Boolean>
 }

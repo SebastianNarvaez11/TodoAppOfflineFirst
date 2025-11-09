@@ -22,10 +22,10 @@ interface TaskApiService {
     @PATCH("/rest/v1/tasks")
     @Headers("Prefer: return=representation")
     suspend fun updateTask(
-        @Query(value = "id", encoded = true) filter: String,
+        @Query(value = "remoteId", encoded = true) filter: String,
         @Body task: TaskUpdateRequest
     ): List<TaskDto>
 
     @DELETE("/rest/v1/tasks")
-    suspend fun  deleteTask(@Query(value = "id", encoded = true) filter: String)
+    suspend fun  deleteTask(@Query(value = "remoteId", encoded = true) filter: String)
 }

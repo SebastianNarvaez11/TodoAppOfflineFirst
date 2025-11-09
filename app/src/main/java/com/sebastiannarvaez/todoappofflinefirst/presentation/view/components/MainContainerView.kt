@@ -30,7 +30,7 @@ fun MainContainerView(
     tasks: List<TaskModel>,
     isLoading: Boolean,
     error: String?,
-    onLoadTaskFromApi: () -> Unit,
+//    onLoadTaskFromApi: () -> Unit,
     onDeleteTask: (task: TaskModel) -> Unit,
     onPressTask: (task: TaskModel) -> Unit
 ) {
@@ -69,12 +69,12 @@ fun MainContainerView(
             }
         }
 
-        Button(onClick = { onLoadTaskFromApi() }) {
-            Text(text = "Cargar tasks desde la api")
-        }
+//        Button(onClick = { onLoadTaskFromApi() }) {
+//            Text(text = "Cargar tasks desde la api")
+//        }
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(tasks, key = { it.id }) { task ->
+            items(tasks, key = { it.localId }) { task ->
                 TaskItemView(task = task, onDelete = { onDeleteTask(task) }) { task ->
                     onPressTask(task)
                 }
