@@ -84,13 +84,13 @@ dependencies {
     //room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 
     //dagger hilt
     implementation(libs.hilt.android)
     implementation(libs.hilt.navigation)
     ksp(libs.hilt.compiler)
 
-    ksp(libs.androidx.room.compiler) //se necesita para room y dagger hilt
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
